@@ -3,6 +3,8 @@
         (cond 
             ((eq (caar prg) 'int) (run (cdr prg) ent (agregar-var (cdar prg) mem)))
             ((eq (caar prg) 'main) (ejec (cadar prg) ent mem))
+            ;Las funciones solo pueden ser del tipo void (por ahora...)
+            ((eq (caar prg) 'void) (run (cdr prg) ent (agregar-fun (car prg) mem)))
             (t 'ERROR_FALTA_MAIN)
         )
     )
@@ -25,17 +27,30 @@
     )
 )
 
+(defun agregar-fun (fun mem)
+    (if (null fun) mem
+        (cons (list (cadr fun) fun) mem)
+    )
+)
+
 ;Funcion para asignar algun valor a la memoria
 ;(asignar-a-mem 'd '2 '((D 1) (C 0) (B 3) (A 3)))
 ;((D 2) (C 0) (B 3) (A 3))
-(defun asignar-a-mem (var val mem &optional (resultado nil))
-    (if (null mem) (reverse resultado)
+(defun asignar-a-mem (var val mem &optional (aux nil))
+    (if (null mem) aux
         (if (eq var (caar mem))
-            (asignar-a-mem var val (cdr mem) (cons (list var val) resultado))
-            (asignar-a-mem var val (cdr mem) (cons (car mem) resultado))
+            (append (reverse aux) (cons (list var val) (cdr mem)))
+            (asignar-a-mem var val (cdr mem) (cons (car mem) aux))
         )
     )
 )
+
+;    (if (null mem) (reverse resultado)
+;        (if (eq var (caar mem))
+;            (asignar-a-mem var val (cdr mem) (cons (list var val) resultado))
+;            (asignar-a-mem var val (cdr mem) (cons (car mem) resultado))
+;        )
+;    )
 
 (defun ejec (prg ent mem &optional (sal nil))
     (if (null prg) sal
@@ -51,50 +66,64 @@
 
             ; WHILE
             ((eq (caar prg) 'while) (handle-while prg ent mem sal))
+
+            ((eq (caar prg) 'int) (ejec (cdr prg) ent (agregar-var (cdar prg) mem) sal))
+
+            ((eq (caar prg) 'FIN_FUN) (ejec (cdr prg) ent (limpiar-mem mem) sal))
             
             ;asignacion
             ((esasignacion (car prg) mem) (handle-asignacion prg ent mem sal))
 
-            (t (list 'ERROR  prg))  
+            (t (handle-funcall prg ent mem sal))
+            ;(t (list 'ERROR  prg))  
         )
+    )
+)
+
+;Removemos del stack todas las variables asignadas por una funcion
+(defun limpiar-mem (mem)
+    (if (null mem) nil
+        (if (eq 'FIN_FUN (caar mem))
+            (cdr mem)
+            (limpiar-mem (cdr mem))
+        )
+    )
+)
+
+(defun handle-funcall (prg ent mem sal)
+    (if (eq (buscar_variable (caar prg) mem) 'ERROR_VARIABLE_NO_DECLARADA)
+        (list 'ERROR_FUN_NOT_FOUND  prg)
+        (handle-funcall2 prg ent mem sal (buscar_variable (caar prg) mem))
+    )
+)
+
+(defun handle-funcall2 (prg ent mem sal fun)
+    (ejec (append (cadddr fun) (cons (list 'FIN_FUN) (cdr prg))) ent (build-funcall-arg mem (caddr fun) (cdar prg)) sal)
+)
+
+;Marcamos en el stack la posicion donde finaliza la funcion.
+;Luego agregamos los argumentos evaluados
+(defun build-funcall-arg (mem args valores)
+    (build-funcall-arg2 (cons (list 'FIN_FUN 'FIN_FUN) mem) args valores)
+)
+
+;Agregamos a memoria los argumentos evaluados
+;mem es una lista con las variables definidas
+;args son los argumentos que recibe la funcion, en la forma:
+; '(int x int y)
+;valores son las expresiones a evaluar para asignar a los argumentos 
+(defun build-funcall-arg2 (mem args valores)
+    (if (null valores) mem
+        (build-funcall-arg2 (cons (list (cadr args) (valor (car valores) mem)) mem) (cddr args) (cdr valores))
     )
 )
 
 (defun handle-if (prg ent mem sal)
-    (if (tiene-asignaciones (cadar prg))
-        (ejec (guardar-asignaciones (cdr prg) (cadar prg)) ent mem sal)
-        (if (valor (cadar prg) mem)
-            (ejec (append (caddar prg) (cdr prg)) ent mem sal)
-            (if (eq 5 (length (car prg))) ;Tiene else
-                (ejec (append (cadr (cdddar prg)) (cdr prg)) ent mem sal)
-                (ejec (cdr prg) ent mem sal)
-            )
-        )
-    )
-)
-
-(defun guardar-asignaciones (prg exp &optional (asignaciones nil))
-    (if (null exp)
-        (append (reverse asignaciones) prg)
-        (if (esasignacion2 (cdr exp))
-            (guardar-asignaciones prg (cdr exp) (cons exp asignaciones))
-            (if (listp (cadr exp))
-                (guardar-asignaciones prg (cadr exp) asignaciones)
-                (guardar-asignaciones prg (cdr exp) asignaciones)
-            )
-        )
-    )
-)
-
-(defun tiene-asignaciones (exp)
-    (if (null exp)
-        nil
-        (if (esasignacion2 (cdr exp))
-            T
-            (if (listp (cadr exp))
-                (tiene-asignaciones (cadr exp))
-                (tiene-asignaciones (cdr exp))
-            )
+    (if (valor (cadar prg) mem)
+        (ejec (append (caddar prg) (cdr prg)) ent mem sal)
+        (if (eq 5 (length (car prg))) ;Tiene else
+            (ejec (append (cadr (cdddar prg)) (cdr prg)) ent mem sal)
+            (ejec (cdr prg) ent mem sal)
         )
     )
 )
@@ -118,17 +147,20 @@
 )
 
 (defun handle-asignacion (prg ent mem sal)
-    (cond
-        ((eq (cadar prg) '=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (cddar prg) mem) mem) sal))
-        ((eq (cadar prg) '+=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (append (list (caar prg) '+)(list(cddar prg))) mem) mem) sal))
-        ((eq (cadar prg) '-=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (append (list (caar prg) '-)(list(cddar prg))) mem) mem) sal))
-        ((eq (cadar prg) '*=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (append (list (caar prg) '*)(list(cddar prg))) mem) mem) sal))
-        ((eq (cadar prg) '/=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (append (list (caar prg) '/)(list(cddar prg))) mem) mem) sal))
-        ((eq (cadar prg) '++) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (list (caar prg) '+ '1) mem) mem) sal))
-        ((eq (cadar prg) '--) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (list (caar prg) '- '1) mem) mem) sal))
-        ((eq (caar prg) '++) (ejec (cdr prg) ent (asignar-a-mem (cadar prg) (valor (list (cadar prg) '+ '1) mem) mem) sal))
-        ((eq (caar prg) '--) (ejec (cdr prg) ent (asignar-a-mem (cadar prg) (valor (list (cadar prg) '- '1) mem) mem) sal))
-        (t 2)
+    (if (eq (buscar_variable (caar prg) mem) 'ERROR_VARIABLE_NO_DECLARADA)
+        (list 'ERROR_FUN_NOT_FOUND  prg)
+        (cond
+            ((eq (cadar prg) '=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (cddar prg) mem) mem) sal))
+            ((eq (cadar prg) '+=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (append (list (caar prg) '+)(list(cddar prg))) mem) mem) sal))
+            ((eq (cadar prg) '-=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (append (list (caar prg) '-)(list(cddar prg))) mem) mem) sal))
+            ((eq (cadar prg) '*=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (append (list (caar prg) '*)(list(cddar prg))) mem) mem) sal))
+            ((eq (cadar prg) '/=) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (append (list (caar prg) '/)(list(cddar prg))) mem) mem) sal))
+            ((eq (cadar prg) '++) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (list (caar prg) '+ '1) mem) mem) sal))
+            ((eq (cadar prg) '--) (ejec (cdr prg) ent (asignar-a-mem (caar prg) (valor (list (caar prg) '- '1) mem) mem) sal))
+            ((eq (caar prg) '++) (ejec (cdr prg) ent (asignar-a-mem (cadar prg) (valor (list (cadar prg) '+ '1) mem) mem) sal))
+            ((eq (caar prg) '--) (ejec (cdr prg) ent (asignar-a-mem (cadar prg) (valor (list (cadar prg) '- '1) mem) mem) sal))
+            (t 2)
+        )
     )
 )
 
@@ -204,8 +236,8 @@
     (cond
         ((eq x '*) 10)
         ((eq x '/) 10)
-        ((eq x '+) 5)
-        ((eq x '-) 5)
+        ((eq x '+) 6)
+        ((eq x '-) 6)
         ((eq x '>) 5)
         ((eq x '>) 5)
         ((eq x '>=)5)
@@ -248,240 +280,46 @@
 )
 
 
-(setq main1 '( 
-    (int z = 2)
-    (int b = 2)
-    (int c = 2)
-    )
-)
-
-(setq main2 '( 
-        (int a = 2 b = 3)
-        (main (
-            (printf (a + b))
+(setq main '( 
+    (int a b y = 80)
+    (void PROC (int x int y)
+        (
+            (int b = 100)
+            (int a = 50)
+            (x ++)
+            (y ++)
+            (a ++)
+            (b ++)
+            (printf x)
+            (printf y)
+            (printf a)
             (printf b)
-            )
         )
     )
-)
-
-;(run main3 nil)
-;(ERROR_VARIABLE_NO_DECLARADA)
-(setq main3 '( 
-    (int z = 2)
     (main (
-        (printf "El numero Z es")
-        (printf z)
-        )
-    )
-))
-
-;(run main4 '(5))
-;(5)
-(setq main4 '( 
-    (int z = 2)
-    (main (
-        (scanf b)
-        (printf b)
-        )
-    )
-))
-
-;(run main5 '(5))
-;(8)
-(setq main5 '( 
-    (int a = 2 b)
-    (main (
-        (scanf b)
-        (a = b + 3)
-        (printf a)
-        )
-    )
-))
-
-;(run main5_2 '(6))
-;(8)
-(setq main5_2 '(
-    (int a = 2 b)
-    (main (
-        (a = (a + 1) * 4)
-        (b -= 5)
-        (a += 3)
-        (printf a)
-        (scanf a)
-        (printf a)
-        (printf b)
-        )
-    )
-))
-
-
-;(run main6 nil)
-;(3)
-(setq main6 '( 
-    (int a = 2 b)
-    (main (
-        (a = 3)
-        (printf a)
-        )
-    )
-))
-
-;(run main7 nil)
-;(2)
-(setq main7 '( 
-    (int a = 2 b)
-    (main (
-        (-- a)
-        (++ a)
-        (a --)
-        (a ++)
-        (a += 1)
-        (a -= 1)
-        (a *= 1)
-        (a /= 1)
-        (printf a)
-        )
-    )
-))
-
-;(run main8 nil)
-;(2)
-(setq main8 '( 
-    (int a = 2)
-    (main (
-        (if (a == 2)
-            ( (printf a) 
-            )
-        )
-        )
-    )
-))
-
-;(run main9 nil)
-;(2)
-(setq main9 '( 
-    (int a = 3)
-    (main (
-        (if (a == 2)
-            ( (printf a) 
-            )
-        )
-        )
-    )
-))
-
-;(run main10 nil)
-;(5 6 4 5)
-(setq main10 '( 
-    (int a = 5)
-    (main (
-        (printf a) 
-        (++ a)
-        (printf a) 
-        (if (a == 2)
-            ( 
-                (++ a)
-                (printf a) 
-            )
-        else
-            (
-                (a --)
-                (a --)
-                (printf a)
-            )
-        )
-        (++ a)
-        (printf a) 
-        )
-    )
-))
-
-;(run main11 '(700 100))
-;(121 893 700 193 100)
-(setq main11 '( 
-    (int x y p = 10)
-    (int r)
-    (main ( 
-        (x = p + 10)
-        (p ++)
-        (++ x)
-        (x *= p - 4)
-        (if (x < p)
-            ( 
-                (printf (x + p))
-                (scanf y)
-            )
-        else 
-            ( 
-                (x = x * 6)
-                (printf (p * p))
-            )
-        )
-        (while (x > p * 10)
-            (
-                (printf (x + p))
-                (scanf y)
-                (printf y)
-                (x -= y)
-            )
-        )
-        )
-    )
-))
-
-;(run main12 '(5))
-;(120)
-(setq main12 '( 
-    (int n fact = 1)
-    (main (
-        (scanf n)
-        (if (n < 0 )
-            ( 
-                (printf "no existe fact de nro negativo" )
-            )
-        else 
-            (
-                (while (n > 1)
-                    (
-                        (fact = fact * n) (n -- )
-                    )
-                ); cierra while
-                (printf fact )
-            ); cierra else
-        ); cierra if
-        )
-    ); cierra main
-))
-
-;(run main nil)
-;(2)
-(setq main20 '( 
-    (int a b c)
-    (main (
-        (a = 2)
-        (b = 3)
-        (c = 4)
-        (if (c > 11 * (a = 5 * (b = b + 1 + (c = 10))))
-            ( 
-                (printf 111)  
-            )
-        )
+        (a = 10)
+        (b = 20)
+        (PROC (a * 10) (y * 5))
         (printf a) 
         (printf b) 
-        (printf c) 
+        (printf y) 
         )
     )
 ))
 
+;(trace limpiar-mem)
 ;(trace run)
 ;(trace ejec)
 ;(trace valor)
+;(trace agregar-fun)
 ;(trace handle-if)
 ;(trace handle-while)
+;(trace esasignacion)
 ;(trace handle-asignacion)
 ;(trace asignar-a-mem)
 ;(trace operar)
-
-;(trace tiene-asignaciones)
-;(trace guardar-asignaciones)
+;(trace buscar_variable)
+;(trace handle-funcall)
+;(trace handle-funcall2)
+;(trace ejec)
+;(trace build-funcall-arg)
