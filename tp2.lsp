@@ -32,7 +32,7 @@
 ;(evaluar '((lambda (x) (* x 2)) 2) nil ) => 4
 ;(evaluar '((lambda (x y) (+ (* x 2) y)) 2 4) nil) => 8
 ;(evaluar '(lambda (x) (* x 2)) nil) => (lambda (x) (* x 2))
-;(evaluar '(sumar '2) '(sumar (lambda (x) (+ x 1))))8
+;(evaluar '(sumar '2) '(sumar (lambda (x) (+ x 1)))) => 3
 ;
 ;Forma funcional mapcar / reduce
 ;(evaluar '(mapcar 'numberp numeros) '(numeros (4 5 6 nil))) => (t t t nil)
@@ -60,7 +60,7 @@
 ;(evaluar '(mapcar 'list '(1 2 3)'(4 5 6)) nil)
 ;(evaluar '(mapcar 'fact numeros) '(numeros (0 1 2 3 4 5 6 ) fact (lambda (X)(cond (( < X 2) 1) (t (* X (fact (- X 1))))))))
 
-
+;(evaluar '(reduce 'suma numeros) '(numeros (0 1 2 3 4 5 6 7 8 9) suma (lambda (x y) (+ x y))))
 (defun evaluar (exp amb) 
 	(if (atom exp) (evaluar-atom exp amb)
 		(cond 
@@ -72,6 +72,7 @@
 			((eq (car exp) 'cond)	(evaluar-cond exp amb))
 			((eq (car exp) 'while)	(evaluar-while exp amb))
 			((eq (car exp) 'mapcar)	(evaluar-mapcar (evaluar (cadr exp) amb) (evaluar-arg (cddr exp) amb) amb))
+			((eq (car exp) 'reduce)	(evaluar-reduce (evaluar (cadr exp) amb) (evaluar-arg (cddr exp) amb) amb))
 			(t (aplicar (car exp)	(evaluar-arg (cdr exp) amb) amb))
 		)
 	)
@@ -82,6 +83,16 @@
 	(if (null (car listas)) nil
 		(cons (aplicar fn (mapcar 'car listas) amb) (evaluar-mapcar fn (mapcar 'cdr listas) amb))
 	)
+)
+
+(defun evaluar-reduce (fn listas amb)
+	(if (null (cddar listas)) (aplicar-reduce fn listas amb)
+		(evaluar-reduce fn (list (cons (aplicar-reduce fn listas amb) (cddar listas))) amb)
+	)
+)
+
+(defun aplicar-reduce (fn listas amb)
+	(aplicar fn (list (caar listas) (cadar listas)) amb)
 )
 
 (defun aplicar (fn lae amb)
@@ -104,7 +115,6 @@
 			((eq fn '=)			(= (car lae) (cadr lae)))
 			((eq fn 'eq)		(eq (car lae) (cadr lae)))
 			((eq fn 'not)		(not (car lae)))
-			((eq fn 'reduce) 	(reduce (car lae) (cadr lae)))
 			((eq fn 'apply) 	(apply (car lae) (cadr lae)))
 			((eq fn 'atom)		(atom (car lae)))
 			((eq fn 'listp)		(listp (car lae)))
@@ -229,6 +239,7 @@
 ;(trace evaluar-if)
 ;(trace evaluar-lambda)
 ;(trace evaluar-mapcar)
+;(trace evaluar-reduce)
 ;(trace evaluar-cond)
 ;(trace evaluar-while)
 ;(trace evaluar-arg)
