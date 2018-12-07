@@ -459,17 +459,16 @@
 (setq main20 '( 
     (int a b c)
     (main (
-        (a = 2)
-        (b = 3)
-        (c = 4)
-        (if (c > 11 * (a = 5 * (b = b + 1 + (c = 10))))
+        (a = 1)
+        (b = 1)
+        (c = 2)
+        (if (b < (a = a + c * (b = 2)))
             ( 
                 (printf 111)  
             )
         )
         (printf a) 
         (printf b) 
-        (printf c) 
         )
     )
 ))
