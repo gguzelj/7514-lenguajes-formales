@@ -119,11 +119,28 @@
 )
 
 (defun handle-if (prg ent mem sal)
+    (handle-if2 prg ent (agregar-asignaciones (cadar prg) mem) sal)
+)
+
+(defun handle-if2 (prg ent mem sal)
     (if (valor (cadar prg) mem)
         (ejec (append (caddar prg) (cdr prg)) ent mem sal)
         (if (eq 5 (length (car prg))) ;Tiene else
             (ejec (append (cadr (cdddar prg)) (cdr prg)) ent mem sal)
             (ejec (cdr prg) ent mem sal)
+        )
+    )
+)
+
+(defun agregar-asignaciones (exp mem)
+    (if (null exp)
+        mem
+        (if (esasignacion exp mem)
+            (agregar-asignaciones (cdr exp) (asignar-a-mem (car exp) (valor (cddr exp) mem) mem))
+            (if (listp (car exp))
+                (agregar-asignaciones (cdr exp) (agregar-asignaciones (car exp) mem))
+                (agregar-asignaciones (cdr exp) mem)
+            )
         )
     )
 )
@@ -279,37 +296,58 @@
     )
 )
 
-
-(setq main '( 
-    (int a b y = 80)
-    (void PROC (int x int y)
-        (
-            (int b = 100)
-            (int a = 50)
-            (x ++)
-            (y ++)
-            (a ++)
-            (b ++)
-            (printf x)
-            (printf y)
-            (printf a)
-            (printf b)
-        )
-    )
+(setq main1 '( 
+    (int a b)
     (main (
-        (a = 10)
-        (b = 20)
-        (PROC (a * 10) (y * 5))
+        (a = 1)
+        (if (2 < (a = 3 * 2))
+            ( 
+                (printf 111)  
+            )
+        )
         (printf a) 
-        (printf b) 
-        (printf y) 
         )
     )
 ))
 
+(setq main2 '( 
+    (int a b)
+    (main (
+        (a = 1)
+        (b = 1)
+        (if (2 < (a = 3 * 2) + (2 * (12 + (b = 12 + 2))))
+            ( 
+                (printf 111)  
+            )
+        )
+        (printf a) 
+        (printf b) 
+        )
+    )
+))
+
+(setq main3 '( 
+    (int a b c)
+    (main (
+        (a = 1)
+        (b = 1)
+        (c = 2)
+        (if (b < (a = a + c * (b = 2)))
+            ( 
+                (printf 111)  
+            )
+        )
+        (printf a) 
+        (printf b) 
+        )
+    )
+))
+
+
+
 ;(trace limpiar-mem)
 ;(trace run)
-;(trace ejec)
+;(trace agregar-asignaciones)
 ;(trace valor)
 ;(trace agregar-fun)
 ;(trace handle-if)
