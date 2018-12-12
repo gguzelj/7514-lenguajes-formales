@@ -119,11 +119,7 @@
 )
 
 (defun handle-if (prg ent mem sal)
-    (handle-if2 prg ent (agregar-asignaciones (cadar prg) mem) sal)
-)
-
-(defun handle-if2 (prg ent mem sal)
-    (if (valor (cadar prg) mem)
+    (if (valor2 (cadar prg) mem)
         (ejec (append (caddar prg) (cdr prg)) ent mem sal)
         (if (eq 5 (length (car prg))) ;Tiene else
             (ejec (append (cadr (cdddar prg)) (cdr prg)) ent mem sal)
@@ -132,17 +128,67 @@
     )
 )
 
-(defun agregar-asignaciones (exp mem)
-    (if (null exp)
-        mem
-        (if (esasignacion exp mem)
-            (agregar-asignaciones (cdr exp) (asignar-a-mem (car exp) (valor (cddr exp) mem) mem))
-            (if (listp (car exp))
-                (agregar-asignaciones (cdr exp) (agregar-asignaciones (car exp) mem))
-                (agregar-asignaciones (cdr exp) mem)
+(defun es_operador2 (operador)
+    (if (null operador) nil
+        (cond 
+            ((equal operador '+) t)
+            ((equal operador '-) t)
+            ((equal operador '*) t)
+            ((equal operador '/) t)
+            ((equal operador '>=) t)
+            ((equal operador '>) t)
+            ((equal operador '<=) t)
+            ((equal operador '<) t)
+            ((equal operador '=) t)
+            ((equal operador '==) t)
+            ((equal operador '!=) t)
+            (t nil)
+        )
+    )
+)
+
+(defun valor2 (exp &optional(operadores nil) (operandos nil))
+    (if (and (atom (car exp)) (not (null (car exp)))) 
+        (if (numberp (car exp)) 
+            exp
+            (cons (buscar_variable (car exp) (cadr exp)) (cdr exp))
+        )
+        (if (null (car exp))
+            (if (null operadores)
+                (caar operandos)
+                (if (eq (car operadores) '=)
+                    (valor2 (cadr operandos) (car (cons (operar (car operadores) (cadr operandos) (car operandos) mem) (cddr operandos))) (cdr operadores))
+                    (valor2 exp mem (cdr operadores) (cons (operar (car operadores) (cadr operandos) (car operandos)) (cddr operandos)))
+                )
+            )
+            (if (es_operador2 (car exp))
+                (if (null operadores)
+                    (valor2 (cdr exp) mem (cons (car exp) operadores) operandos)
+                    (if (< (peso (car operadores)) (peso (car exp)))
+                        (valor2 (cdr exp) mem (cons (car exp) operadores) operandos)
+                    )
+                )
+;                (if (eq (cadr exp) '=)
+;                    (valor2 (cdr exp) mem operadores (cons (car exp) operandos))
+;                    (valor2 (cdr exp) mem operadores (cons (valor2 (car exp) mem) operandos))
+;                )
+                (valor2 (nextExp exp) operadores (cons (valor2 (currExp exp)) operandos))
             )
         )
     )
+)
+
+;(valor2 '(1 nil))
+;(valor2 '(a ((a 4) (b 2))))
+;(valor2 '((a) ((a 4) (b 2))))
+;(valor2 '(2 < (a = 3 * (b = a + b)) '((a 1) (b 2)))
+
+(defun currExp (expest)
+    (cons (caar expest) (cdr expest))
+)
+
+(defun nextExp (expest)
+    (cons (cdar expest) (cdr expest))
 )
 
 (defun handle-while (prg ent mem sal)
@@ -217,8 +263,9 @@
     )
 )
 
-(defun operar (operador val1 val2)
+(defun operar (operador val1 val2 &optional(mem nil))
     (cond
+        ((eq operador '=) (asignar-a-mem val1 val2 mem))
         ((eq operador '==) (eq val1 val2))
         ((eq operador '!=) (not (eq val1 val2)))
         ((eq operador '&&) (and (not (eq 0 val1)) (not (eq 0 val2))))
@@ -228,26 +275,6 @@
     )
 )
 
-(defun valor (exp mem &optional(operadores nil) (operandos nil))
-    (if (and (atom exp) (not (null exp))) (if (numberp exp) exp (buscar_variable exp mem))
-        (if (null exp)
-            (if (null operadores)
-                (car operandos)
-                (valor exp mem (cdr operadores) (cons (operar (car operadores) (cadr operandos) (car operandos)) (cddr operandos)))
-            )
-            (if (es_operador (car exp))
-                (if (null operadores)
-                    (valor (cdr exp) mem (cons (car exp) operadores) operandos)
-                    (if (< (peso (car operadores)) (peso (car exp)))
-                        (valor (cdr exp) mem (cons (car exp) operadores) operandos)
-                        (valor exp mem (cdr operadores) (cons (operar (car operadores) (cadr operandos) (car operandos)) (cddr operandos)))
-                    )
-                )
-                (valor (cdr exp) mem operadores (cons (valor (car exp) mem) operandos))
-            )
-        )
-    )
-)
 
 (defun peso (x)
     (cond
@@ -315,9 +342,10 @@
     (main (
         (a = 1)
         (b = 1)
-        (if (2 < (a = 3 * 2) + (2 * (12 + (b = 12 + 2))))
+        (if (2 < (a = 3 * (b = a + b)))
             ( 
-                (printf 111)  
+                (printf 111)(a ++) (b ++) 
+                (printf a)(printf b) 
             )
         )
         (printf a) 
@@ -329,26 +357,75 @@
 (setq main3 '( 
     (int a b c)
     (main (
-        (a = 1)
+        (a = 1) 
+        (c = 3)
         (b = 1)
-        (c = 2)
-        (if (b < (a = a + c * (b = 2)))
+        (if ((a = 2 *(b = 5)) <  (a = 3 * (b = a + b))+ (c = b))
             ( 
-                (printf 111)  
+                (printf 111)
+                (printf a)(printf b) (printf c)
             )
         )
         (printf a) 
-        (printf b) 
+        (printf b)(printf c) 
         )
     )
 ))
 
 
 
+(defun es_operador2 (operador)
+    (if (null operador) nil
+        (if (eq operador '=)
+            t
+            (es_operador operador)
+        )
+    )
+)
+
+;Tomo una lista de operandos, que pueden ser variables o number's, y devuelvo esos mismos numeros, o el valor en memoria
+(defun mapToValues (opn mem &optional(mapped nil))
+    (if (null opn)
+        (reverse mapped)
+        (if (numberp (car opn)) 
+            (mapToValues (cdr opn) mem (cons (car opn) mapped))
+            (mapToValues (cdr opn) mem (cons (buscar_variable (car opn) mem) mapped))
+        )
+    )
+)
+
+;Funcion S que recibe una expresion, un estado de la memoria y devuelve
+;como respuesta el resultado de ejecutar esa expresion y el estado de la memoria
+(defun s (exp mem &optional(opr nil) (opn nil))
+    (if (null exp)
+        (list (valor exp mem opr (mapToValues opn mem)) mem)
+        (if (es_operador (car exp))
+            (if (null opr)
+                (s (cdr exp) mem (cons (car exp) opr) opn)
+                (if (<= (peso (car opr)) (peso (car exp)))
+                    (s (cdr exp) mem (cons (car exp) opr) opn)
+                    ;Necesito hacer el calculo de los operandos primero (ej. a + b * c),
+                    ;pero antes tengo que cambiar el estado de la memoria.
+                    ;Por esto, calculo el resultado de (s (cdr exp) mem), y uso esa nueva memoria
+                    ;para hacer el calculo sobre los operandos
+                    (s2 exp opr opn (s (cdr exp) mem))
+                )
+            )
+            (s (cdr exp) mem opr (cons (car exp) opn))
+        )
+    )
+)
+
+(defun s2 (exp opr opn resultado)
+    (s nil (cadr resultado) (list (car exp)) (cons (car resultado) (list (car (s nil (cadr resultado) opr opn)))))
+)
+
+
 ;(trace limpiar-mem)
 ;(trace run)
 ;(trace agregar-asignaciones)
-;(trace valor)
+(trace s)
+;(trace es_operador2)
 ;(trace agregar-fun)
 ;(trace handle-if)
 ;(trace handle-while)
