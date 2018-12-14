@@ -119,11 +119,15 @@
 )
 
 (defun handle-if (prg ent mem sal)
-    (if (valor (cadar prg) mem)
-        (ejec (append (caddar prg) (cdr prg)) ent mem sal)
+    (handle-if2 prg ent sal (s (cadar prg) mem))
+)
+
+(defun handle-if2 (prg ent sal if_result)
+    (if (car if_result)
+        (ejec (append (caddar prg) (cdr prg)) ent (cadr if_result) sal)
         (if (eq 5 (length (car prg))) ;Tiene else
-            (ejec (append (cadr (cdddar prg)) (cdr prg)) ent mem sal)
-            (ejec (cdr prg) ent mem sal)
+            (ejec (append (cadr (cdddar prg)) (cdr prg)) ent (cadr if_result) sal)
+            (ejec (cdr prg) ent (cadr if_result) sal)
         )
     )
 )
@@ -260,6 +264,23 @@
     )
 )
 
+(setq main '( 
+    (int a b c)
+    (main (
+        (a = 1)
+        (b = 1)
+        (c = 2)
+        (if (b < (a = a + c * (b = 2)))
+            ( 
+                (printf 111)  
+            )
+        )
+        (printf a) 
+        (printf b) 
+        )
+    )
+))
+
 (setq main1 '( 
     (int a b)
     (main (
@@ -305,6 +326,41 @@
         )
         (printf a) 
         (printf b)(printf c) 
+        )
+    )
+))
+
+(setq main4 '( 
+    (int a b c)
+    (main (
+        (a = 3)
+        (b = 2)
+        (c = 1)
+        (if ((b *= b + c - a) > (c = b * a + (c = -6)))
+            ( 
+                (printf a)(printf b) (printf c)
+            )
+        )
+        (printf a)(printf b) (printf c)
+        )
+    )
+))
+
+
+(setq main5 '( 
+    (int a b c d e)
+    (main (
+        (a = 3)
+        (b = 2)
+        (c = 1)
+        (d = 5)
+        (e = 4)
+        (if ((b *= b * (e += d + a) + c - a) < (c = b * a + (c = -6) - (b *= c * d) + 34))
+            ( 
+                (printf a)(printf b) (printf c)(printf d)(printf e)
+            )
+        )
+        (printf a)(printf b) (printf c)(printf d)(printf e)
         )
     )
 ))
@@ -362,7 +418,7 @@
                     )
                 )
                 (if (esasignacion2 (list (cadr exp)))
-                    (asig2 (car exp) (cadr exp) (s (cddr exp) mem) opr opn)
+                    (asig (car exp) (cadr exp) (s (cddr exp) mem) opr opn)
                     (s2 (cdr exp) opr opn (s (car exp) mem))
                 )
             )
@@ -370,7 +426,7 @@
     )
 )
 
-(defun asig2 (var op resultado opr opn)
+(defun asig (var op resultado opr opn)
     (cond
         ((eq op '=)  (s var (asignar-a-mem var (car resultado) (cadr resultado)) opr opn))
         ((eq op '+=) (s var (asignar-a-mem var (apply '+ (list (buscar_variable var (cadr resultado)) (car resultado))) (cadr resultado)) opr opn))
@@ -391,11 +447,6 @@
 
 (defun s_operar3 (exp mem opr opn op2 resultado) 
     (s exp (cadr resultado) (cdr opr) (cons (operar (car opr) (car resultado) op2) (cddr opn)))
-)
-
-
-(defun asig (var resultado opr opn)
-    (s var (asignar-a-mem var (car resultado) (cadr resultado)) opr opn)
 )
 
 (defun s2 (exp opr opn resultado)
