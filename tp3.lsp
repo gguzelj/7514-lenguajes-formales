@@ -351,8 +351,6 @@
                     (list nil mem)
                     (s (car opn) mem)
                 )
-                ;Calculo la operacion (car opr) sobre los operandos, pero primero los evaluo, 
-                ;cambiando el estado de la memoria en cada paso.
                 (s_operar exp mem opr opn)
             )
             (if (es_operador (car exp))
@@ -360,19 +358,26 @@
                     (s (cdr exp) mem (cons (car exp) opr) opn)
                     (if (< (peso (car opr)) (peso (car exp)))
                         (s (cdr exp) mem (cons (car exp) opr) opn)
-                        ;Necesito hacer el calculo de los operandos primero (ej. a + b * c),
-                        ;pero antes tengo que cambiar el estado de la memoria.
-                        ;Por esto, calculo el resultado de (s (cdr exp) mem), y uso esa nueva memoria
-                        ;para hacer el calculo sobre los operandos
                         (s_operar exp mem opr opn)
                     )
                 )
-                (if (eq (cadr exp) '=)
-                    (asig (car exp) (s (cddr exp) mem) opr opn)
+                (if (esasignacion2 (list (cadr exp)))
+                    (asig2 (car exp) (cadr exp) (s (cddr exp) mem) opr opn)
                     (s2 (cdr exp) opr opn (s (car exp) mem))
                 )
             )
         )
+    )
+)
+
+(defun asig2 (var op resultado opr opn)
+    (cond
+        ((eq op '=)  (s var (asignar-a-mem var (car resultado) (cadr resultado)) opr opn))
+        ((eq op '+=) (s var (asignar-a-mem var (apply '+ (list (buscar_variable var (cadr resultado)) (car resultado))) (cadr resultado)) opr opn))
+        ((eq op '-=) (s var (asignar-a-mem var (apply '- (list (buscar_variable var (cadr resultado)) (car resultado))) (cadr resultado)) opr opn))
+        ((eq op '*=) (s var (asignar-a-mem var (apply '* (list (buscar_variable var (cadr resultado)) (car resultado))) (cadr resultado)) opr opn))
+        ((eq op '/=) (s var (asignar-a-mem var (apply '/ (list (buscar_variable var (cadr resultado)) (car resultado))) (cadr resultado)) opr opn))
+        (t nil)
     )
 )
 
@@ -401,7 +406,7 @@
 ;-364445
 
 
-;(trace limpiar-mem)
+;(trace asig2)
 ;(trace run)
 ;(trace agregar-asignaciones)
 ;(trace s)
