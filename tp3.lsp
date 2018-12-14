@@ -341,51 +341,76 @@
     )
 )
 
-;Tomo una lista de operandos, que pueden ser variables o number's, y devuelvo esos mismos numeros, o el valor en memoria
-(defun mapToValues (opn mem &optional(mapped nil))
-    (if (null opn)
-        (reverse mapped)
-        (if (numberp (car opn))
-            (mapToValues (cdr opn) mem (cons (car opn) mapped))
-            (if (listp (car opn))
-                (mapToValues (cdr opn) mem (cons (car (s (car opn) mem)) mapped))
-                (mapToValues (cdr opn) mem (cons (buscar_variable (car opn) mem) mapped))
-            )
-        )
-    )
-)
-
 ;Funcion S que recibe una expresion, un estado de la memoria y devuelve
 ;como respuesta el resultado de ejecutar esa expresion y el estado de la memoria
 (defun s (exp mem &optional(opr nil) (opn nil))
-    (if (null exp)
-        (list (valor exp mem opr (mapToValues opn mem)) mem)
-        (if (es_operador (car exp))
+    (if (and (atom exp) (not (null exp))) (if (numberp exp) (list exp mem) (if (eq exp t) (list t mem) (list (buscar_variable exp mem) mem)))
+        (if (null exp)
             (if (null opr)
-                (s (cdr exp) mem (cons (car exp) opr) opn)
-                (if (<= (peso (car opr)) (peso (car exp)))
+                (if (null (car opn))
+                    (list nil mem)
+                    (s (car opn) mem)
+                )
+                ;Calculo la operacion (car opr) sobre los operandos, pero primero los evaluo, 
+                ;cambiando el estado de la memoria en cada paso.
+                (s_operar exp mem opr opn)
+            )
+            (if (es_operador (car exp))
+                (if (null opr)
                     (s (cdr exp) mem (cons (car exp) opr) opn)
-                    ;Necesito hacer el calculo de los operandos primero (ej. a + b * c),
-                    ;pero antes tengo que cambiar el estado de la memoria.
-                    ;Por esto, calculo el resultado de (s (cdr exp) mem), y uso esa nueva memoria
-                    ;para hacer el calculo sobre los operandos
-                    (s2 exp opr opn (s (cdr exp) mem))
+                    (if (< (peso (car opr)) (peso (car exp)))
+                        (s (cdr exp) mem (cons (car exp) opr) opn)
+                        ;Necesito hacer el calculo de los operandos primero (ej. a + b * c),
+                        ;pero antes tengo que cambiar el estado de la memoria.
+                        ;Por esto, calculo el resultado de (s (cdr exp) mem), y uso esa nueva memoria
+                        ;para hacer el calculo sobre los operandos
+                        (s_operar exp mem opr opn)
+                    )
+                )
+                (if (eq (cadr exp) '=)
+                    (asig (car exp) (s (cddr exp) mem) opr opn)
+                    (s2 (cdr exp) opr opn (s (car exp) mem))
                 )
             )
-            (s (cdr exp) mem opr (cons (car exp) opn))
         )
     )
 )
 
-(defun s2 (exp opr opn resultado)
-    (s nil (cadr resultado) (list (car exp)) (cons (car resultado) (list (car (s nil (cadr resultado) opr opn)))))
+(defun s_operar (exp mem opr opn) 
+    (s_operar2 exp mem opr opn (s (car opn) mem))
 )
+
+(defun s_operar2 (exp mem opr opn resultado)
+    (s_operar3 exp (cadr resultado) opr opn (car resultado) (s (cadr opn) (cadr resultado))) 
+)
+
+(defun s_operar3 (exp mem opr opn op2 resultado) 
+    (s exp (cadr resultado) (cdr opr) (cons (operar (car opr) (car resultado) op2) (cddr opn)))
+)
+
+
+(defun asig (var resultado opr opn)
+    (s var (asignar-a-mem var (car resultado) (cadr resultado)) opr opn)
+)
+
+(defun s2 (exp opr opn resultado)
+    (s exp (cadr resultado) opr (cons (car resultado) opn))
+)
+
+;(valor '(a * c + ( a + b ) * ( a - b ) + ( a * ( a * a * ( b - c * ( b * c - 23) - c ) + c ) - c ) + 45) '((a 23) (b 12) (c 3)))
+;-364445
 
 
 ;(trace limpiar-mem)
 ;(trace run)
 ;(trace agregar-asignaciones)
 ;(trace s)
+;(trace s2)
+;(trace asig)
+;(trace s_operar)
+;(trace s_operar2)
+;(trace s_operar3)
+;(trace valor)
 ;(trace mapToValues)
 ;(trace es_operador2)
 ;(trace agregar-fun)
